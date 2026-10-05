@@ -29,6 +29,8 @@ backup
 
 # Check if VS Mode
 getMinorMajor r3
+cmpwi r3, SCENE_ONLINE_CSS
+beq LOCAL_TEAMS_CSS_INPUTS
 cmpwi r3, SCENE_ONLINE_IN_GAME
 bne EXIT
 
@@ -173,7 +175,7 @@ branchl r12, memcpy
 ################################################################################
 
 # Write command byte to transfer buffer
-li r3, CONST_SlippiCmdSendOnlineFrame
+li r3, CONST_LocalTeamsInputs
 stb r3, TXB_CMD(REG_TXB_ADDRESS)
 
 # Load frame index into transfer buffer
@@ -225,6 +227,13 @@ add r11, r11, r12
 addi r12, REG_TXB_ADDRESS, TXB_PAD
 bl FN_PrintInputs
 .endif
+
+# Capture all hardware reports before synchronized playback overwrites them.
+# This is still inside PROCESS_NOT_ROLLBACK, after freeze-time clearing.
+addi r3, REG_TXB_ADDRESS, TXB_LOCAL_TEAMS_PADS
+addi r4, REG_PARENT_STACK_FRAME, P1_PAD_OFFSET
+li r5, 4 * PAD_REPORT_SIZE
+branchl r12, memcpy
 
 # Transfer buffer over DMA
 mr r3, REG_TXB_ADDRESS
@@ -972,6 +981,163 @@ blr
 INCREMENT_AND_EXIT:
 addi REG_FRAME_INDEX, REG_FRAME_INDEX, 1
 stw REG_FRAME_INDEX, ODB_FRAME(REG_ODB_ADDRESS)
+b EXIT # Gameplay must not fall through into the CSS-only polling/remap below.
+
+################################################################################
+# Sequential local CSS: redirect the active physical pad into visible slot P1.
+# Config/mode disabled returns before changing any original inputs.
+################################################################################
+LOCAL_TEAMS_CSS_INPUTS:
+lwz REG_PARENT_STACK_FRAME, 0(sp)
+li r3, 128
+branchl r12, HSD_MemAlloc
+mr REG_VARIOUS_1, r3
+# Snapshot all reports before remapping; mappings such as 1/3 must not alias.
+addi r3, REG_VARIOUS_1, 64
+addi r4, REG_PARENT_STACK_FRAME, P1_PAD_OFFSET
+li r5, 4 * PAD_REPORT_SIZE
+branchl r12, memcpy
+li r3, CONST_LocalTeamsPoll
+stb r3, 0(REG_VARIOUS_1)
+lbz r3, OFST_R13_ONLINE_MODE(r13)
+lbz r4, -0x49aa(r13)
+cmpwi r4, 0
+beq LOCAL_TEAMS_POLL_MODE_READY
+ori r3, r3, 0x40 # keyboard owns inputs; disarm Start until CSS returns
+LOCAL_TEAMS_POLL_MODE_READY:
+stb r3, 1(REG_VARIOUS_1)
+li REG_COUNT, 0
+LOCAL_TEAMS_COPY_BUTTONS:
+mulli r4, REG_COUNT, PAD_REPORT_SIZE
+addi r4, r4, P1_PAD_OFFSET
+lhzx r3, REG_PARENT_STACK_FRAME, r4
+slwi r4, REG_COUNT, 1
+addi r4, r4, 2
+sthx r3, REG_VARIOUS_1, r4
+addi REG_COUNT, REG_COUNT, 1
+cmpwi REG_COUNT, 4
+blt LOCAL_TEAMS_COPY_BUTTONS
+mr r3, REG_VARIOUS_1
+li r4, 10
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+mr r3, REG_VARIOUS_1
+li r4, LOCAL_TEAMS_STATUS_SIZE
+li r5, CONST_ExiRead
+branchl r12, FN_EXITransferBuffer
+# Store the response for the later CSS Start handler.
+loadwz r3, CSSDT_BUF_ADDR
+cmpwi r3, 0
+beq LOCAL_TEAMS_STATUS_STORED
+addi r3, r3, CSSDT_LOCAL_TEAMS_STATUS
+mr r4, REG_VARIOUS_1
+li r5, LOCAL_TEAMS_STATUS_SIZE
+branchl r12, memcpy
+LOCAL_TEAMS_STATUS_STORED:
+lbz r3, 0(REG_VARIOUS_1)
+cmpwi r3, 0
+beq LOCAL_TEAMS_CSS_FREE
+lbz r3, LTS_NATIVE(REG_VARIOUS_1)
+cmpwi r3, 0
+bne NATIVE_TEAMS_MAP_PADS
+# Keep both original CSS indices at visible P1; never point into a hidden panel.
+li r3, 0
+stb r3, -0x49b0(r13)
+stb r3, -0x5108(r13)
+lbz r3, 3(REG_VARIOUS_1)
+mulli r3, r3, PAD_REPORT_SIZE
+addi r3, r3, P1_PAD_OFFSET
+add REG_VARIOUS_2, REG_PARENT_STACK_FRAME, r3
+addi r3, REG_PARENT_STACK_FRAME, P1_PAD_OFFSET
+mr r4, REG_VARIOUS_2
+li r5, PAD_REPORT_SIZE
+branchl r12, memcpy
+lbz r3, 7(REG_VARIOUS_1)
+cmpwi r3, 0
+beq LOCAL_TEAMS_SUPPRESS_HELD_START
+# Native B unselects the previous token on handoff. Do not feed next-player inputs.
+addi r3, REG_PARENT_STACK_FRAME, P1_PAD_OFFSET
+li r4, PAD_REPORT_SIZE
+branchl r12, Zero_AreaLength
+li r3, 0x0200
+sth r3, P1_PAD_OFFSET(REG_PARENT_STACK_FRAME)
+b LOCAL_TEAMS_CLEAR_OTHER_PORTS
+LOCAL_TEAMS_SUPPRESS_HELD_START:
+lbz r3, 6(REG_VARIOUS_1)
+cmpwi r3, 0
+bne LOCAL_TEAMS_CLEAR_OTHER_PORTS
+lhz r3, P1_PAD_OFFSET(REG_PARENT_STACK_FRAME)
+andi. r3, r3, 0xEFFF
+sth r3, P1_PAD_OFFSET(REG_PARENT_STACK_FRAME)
+LOCAL_TEAMS_CLEAR_OTHER_PORTS:
+addi r3, REG_PARENT_STACK_FRAME, P1_PAD_OFFSET + PAD_REPORT_SIZE
+li r4, 3 * PAD_REPORT_SIZE
+branchl r12, Zero_AreaLength
+li r3, -1
+stb r3, P1_PAD_OFFSET + PAD_REPORT_SIZE + 10(REG_PARENT_STACK_FRAME)
+stb r3, P1_PAD_OFFSET + 2 * PAD_REPORT_SIZE + 10(REG_PARENT_STACK_FRAME)
+stb r3, P1_PAD_OFFSET + 3 * PAD_REPORT_SIZE + 10(REG_PARENT_STACK_FRAME)
+b LOCAL_TEAMS_CSS_FREE
+NATIVE_TEAMS_MAP_PADS:
+li r3, 0
+stb r3, -0x49b0(r13)
+stb r3, -0x5108(r13) # gameplay primary always uses physical P1
+li REG_COUNT, 0
+NATIVE_TEAMS_MAP_PAD:
+mulli r3, REG_COUNT, PAD_REPORT_SIZE
+addi r3, r3, P1_PAD_OFFSET
+add REG_VARIOUS_2, REG_PARENT_STACK_FRAME, r3
+lbz r3, 1(REG_VARIOUS_1)
+cmpw REG_COUNT, r3
+bge NATIVE_TEAMS_UNUSED_PAD
+addi r3, REG_COUNT, LTS_PORTS
+lbzx r3, REG_VARIOUS_1, r3
+mulli r3, r3, PAD_REPORT_SIZE
+addi r4, REG_VARIOUS_1, 64
+add r4, r4, r3
+mr r3, REG_VARIOUS_2
+li r5, PAD_REPORT_SIZE
+branchl r12, memcpy
+# Allow P1 to operate the keyboard; other players keep movement only.
+lbz r3, -0x49aa(r13)
+cmpwi r3, 0
+beq NATIVE_TEAMS_CHECK_READY
+cmpwi REG_COUNT, 0
+beq NATIVE_TEAMS_NEXT_PAD
+b NATIVE_TEAMS_LOCK_SELECTION
+NATIVE_TEAMS_CHECK_READY:
+lbz r3, 5(REG_VARIOUS_1)
+cmpwi r3, 0
+bne NATIVE_TEAMS_LOCK_SELECTION
+li r3, 1
+slw r3, r3, REG_COUNT
+lbz r4, 4(REG_VARIOUS_1)
+and. r3, r3, r4
+bne NATIVE_TEAMS_LOCK_SELECTION
+# Start belongs to the readiness handler, never to stock VS scene advance.
+lhz r3, 0(REG_VARIOUS_2)
+andi. r3, r3, 0xEFFF
+sth r3, 0(REG_VARIOUS_2)
+b NATIVE_TEAMS_NEXT_PAD
+NATIVE_TEAMS_LOCK_SELECTION:
+lhz r3, 0(REG_VARIOUS_2)
+andi. r3, r3, 0x10 # Z remains available; keep stick movement like stock Slippi
+sth r3, 0(REG_VARIOUS_2)
+b NATIVE_TEAMS_NEXT_PAD
+NATIVE_TEAMS_UNUSED_PAD:
+mr r3, REG_VARIOUS_2
+li r4, PAD_REPORT_SIZE
+branchl r12, Zero_AreaLength
+li r3, -1
+stb r3, 10(REG_VARIOUS_2)
+NATIVE_TEAMS_NEXT_PAD:
+addi REG_COUNT, REG_COUNT, 1
+cmpwi REG_COUNT, 4
+blt NATIVE_TEAMS_MAP_PAD
+LOCAL_TEAMS_CSS_FREE:
+mr r3, REG_VARIOUS_1
+branchl r12, HSD_Free
+b EXIT
 
 EXIT:
 #restore registers and sp

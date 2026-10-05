@@ -121,6 +121,15 @@ li r4, 0x1
 stb r4, 0x49(REG_TEXT_STRUCT)
 # Set text to align left
 li r4, 0x0
+getMinorMajor r12
+cmpwi r12, SCENE_ONLINE_CSS
+bne USER_ALIGNMENT_READY
+loadwz r12, CSSDT_BUF_ADDR
+lbz r12, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r12)
+cmpwi r12, 0
+beq USER_ALIGNMENT_READY
+li r4, 1 # centered User/name lines beneath native Teams status
+USER_ALIGNMENT_READY:
 stb r4, 0x4A(REG_TEXT_STRUCT)
 
 # Store Base Z Offset

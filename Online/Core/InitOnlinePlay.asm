@@ -118,7 +118,7 @@ mr REG_MSRB_ADDR, r3
 fetchOnlineStaticDataPtr r12
 
 # Prepare player indices
-lbz r3, -0x5108(r13) # Grab the 1p port in use
+lbz r3, -0x5108(r13) # Grab the 1p port in use (local mode fixes this to P1)
 stb r3, ODB_INPUT_SOURCE_INDEX(REG_ODB_ADDRESS)
 lbz r3, MSRB_LOCAL_PLAYER_INDEX(REG_MSRB_ADDR)
 stb r3, ODB_LOCAL_PLAYER_INDEX(REG_ODB_ADDRESS)

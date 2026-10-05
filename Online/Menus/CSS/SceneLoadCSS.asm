@@ -79,6 +79,74 @@ li r3, MSRB_SIZE
 branchl r12, HSD_MemAlloc
 stw r3, CSSDT_MSRB_ADDR(REG_CSSDT_ADDR)
 
+# Query configuration without sampling inputs or resetting the rematch gate.
+li r3, 64
+branchl r12, HSD_MemAlloc
+mr r29, r3
+li r4, 64
+branchl r12, Zero_AreaLength
+li r3, CONST_LocalTeamsPoll
+stb r3, 0(r29)
+lbz r3, OFST_R13_ONLINE_MODE(r13)
+ori r3, r3, 0x80
+stb r3, 1(r29)
+mr r3, r29
+li r4, 10
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+mr r3, r29
+li r4, LOCAL_TEAMS_STATUS_SIZE
+li r5, CONST_ExiRead
+branchl r12, FN_EXITransferBuffer
+addi r3, REG_CSSDT_ADDR, CSSDT_LOCAL_TEAMS_STATUS
+mr r4, r29
+li r5, LOCAL_TEAMS_STATUS_SIZE
+branchl r12, memcpy
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq NATIVE_RESTORE_DONE
+# Stock CSS initialization can now create the correct placed tokens itself.
+lwz r28, -0x49F0(r13)
+li r3, 1
+stb r3, 0x18(r28) # teams
+li r27, 0
+NATIVE_RESTORE_PLAYER:
+mulli r3, r27, 0x24
+add r26, r28, r3
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 1(REG_CSSDT_ADDR)
+cmpw r27, r3
+li r3, 3 # closed unused slots
+bge NATIVE_RESTORE_KIND
+li r3, 0 # human local slot
+NATIVE_RESTORE_KIND:
+stb r3, 0x71(r26)
+mulli r3, r27, 4
+addi r3, r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_PICKS
+add r25, REG_CSSDT_ADDR, r3
+lbz r3, 3(r25)
+cmpwi r3, 0
+beq NATIVE_RESTORE_EMPTY
+lbz r3, 0(r25)
+stb r3, 0x70(r26)
+lbz r3, 1(r25)
+stb r3, 0x73(r26)
+lbz r3, 2(r25)
+stb r3, 0x79(r26)
+b NATIVE_RESTORE_NEXT
+NATIVE_RESTORE_EMPTY:
+li r3, 26 # unselected/random until this player's token is placed
+stb r3, 0x70(r26)
+li r3, 0
+stb r3, 0x73(r26)
+stb r3, 0x79(r26)
+NATIVE_RESTORE_NEXT:
+addi r27, r27, 1
+cmpwi r27, 4
+blt NATIVE_RESTORE_PLAYER
+NATIVE_RESTORE_DONE:
+mr r3, r29
+branchl r12, HSD_Free
+
 ################################################################################
 # Initialize values
 ################################################################################

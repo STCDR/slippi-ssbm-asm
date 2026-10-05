@@ -20,6 +20,11 @@ lbz r4, OFST_R13_ONLINE_MODE(r13)
 cmpwi r4, ONLINE_MODE_TEAMS
 bne EXIT # exit if not on TEAMS mode
 
+
+# Native local CSS uses Melee's per-door teams and portraits.
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+bne EXIT
 lbz REG_TEAM_IDX, CSSDT_TEAM_IDX(REG_CSSDT_ADDR)
 
 SKIP_PORT_CALC:

@@ -10,6 +10,11 @@ getMinorMajor r3
 cmpwi r3, SCENE_ONLINE_CSS
 bne EXIT # If not online CSS, continue as normal
 
+loadwz r3, CSSDT_BUF_ADDR
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r3)
+cmpwi r3, 0
+bne EXIT # preserve native per-player costume controls
+
 # if on teams mode, skip
 lbz r3, OFST_R13_ONLINE_MODE(r13)
 cmpwi r3, ONLINE_MODE_TEAMS

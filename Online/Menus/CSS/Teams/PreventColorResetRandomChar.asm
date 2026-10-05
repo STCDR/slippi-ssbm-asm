@@ -33,6 +33,11 @@ add REG_PORT_SELECTIONS_ADDR, r4, r3
 lbz r3, 0x70(REG_PORT_SELECTIONS_ADDR)
 mr REG_INTERNAL_CHAR_ID, r3
 
+
+# Native local CSS uses Melee's per-door teams and portraits.
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+bne EXIT
 lbz REG_TEAM_IDX, CSSDT_TEAM_IDX(REG_CSSDT_ADDR)
 
 mr r3, REG_TEAM_IDX

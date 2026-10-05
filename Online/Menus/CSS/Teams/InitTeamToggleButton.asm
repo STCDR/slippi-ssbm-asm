@@ -68,6 +68,11 @@ lbz r4, OFST_R13_ONLINE_MODE(r13)
 cmpwi r4, ONLINE_MODE_TEAMS
 bne EXIT # exit if not on TEAMS mode
 
+loadwz r3, CSSDT_BUF_ADDR
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r3)
+cmpwi r3, 0
+bne EXIT # native VS provides one independent marker per local player
+
 ################################################################################
 # Creates and initializes Button and queues it's THINK function
 ################################################################################

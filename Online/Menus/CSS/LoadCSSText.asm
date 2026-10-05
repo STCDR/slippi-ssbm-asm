@@ -1,9 +1,10 @@
 ################################################################################
-# Address: 0x80264534 # CSS_LoadFunction
+# Address: 0x80264578 # Shared CSS setup after either menu model is loaded.
 ################################################################################
 
 .include "Common/Common.s"
 .include "Online/Online.s"
+.set CSS_TEXT_HOOK_ADDR, 0x80264578
 
 .set REG_CSSDT_ADDR, 31 # everywhere 
 .set REG_MSRB_ADDR, 30 # everywhere 
@@ -157,6 +158,13 @@ blrl
 .short 0x817C # －
 .byte 0x00
 
+.set TPO_NATIVE_PLAYER_LINE, TPO_STRING_SPINNER_DONE + 3
+.string "P%d: %s"
+.set TPO_NATIVE_READY, TPO_NATIVE_PLAYER_LINE + 8
+.string "Ready"
+.set TPO_NATIVE_PRESS_START, TPO_NATIVE_READY + 6
+.string "Press START"
+
 .align 2
 
 ################################################################################
@@ -168,6 +176,17 @@ blrl
 .float 20 # Y Pos of User Display, 0x4
 .float 0 # Z Offset, 0x8
 .float 0.1 # Scaling, 0xC
+
+DATA_NATIVE_USER_TEXT_BLRL:
+blrl
+.float 250 # centered inside the lower-right grey frame
+.float 255 # below both disconnect and chat help
+.float 0
+.float 0.08
+
+NATIVE_EXTRA_TEXT_PROPERTIES:
+blrl
+.float 121 # 52 + 3*23 fourth-row Y
 
 ################################################################################
 # Start Init Function
@@ -198,6 +217,13 @@ li r4, 1 # Set to 1 to not display connect code
 INIT_USER_TEXT:
 bl DATA_USER_TEXT_BLRL
 mflr r3
+loadwz r12, CSSDT_BUF_ADDR
+lbz r12, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r12)
+cmpwi r12, 0
+beq USER_TEXT_POSITION_READY
+bl DATA_NATIVE_USER_TEXT_BLRL
+mflr r3
+USER_TEXT_POSITION_READY:
 branchl r12, FG_UserDisplay
 li r5, 0 # set to 0 to indicate we don't want buffers initialized (done in SceneLoadCSS.asm)
 blrl # FN_InitUserDisplay
@@ -341,6 +367,16 @@ bl INIT_ERROR_LINE_SUBTEXT
 lfs f3, TPO_ERR_LINE4_Y(REG_TEXT_PROPERTIES)
 bl INIT_ERROR_LINE_SUBTEXT
 
+# Append native-only rows, keeping every stock Slippi subtext index intact.
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq NATIVE_EXTRA_TEXT_DONE
+bl NATIVE_EXTRA_TEXT_PROPERTIES
+mflr r24
+lfs f3, 0(r24)
+bl INIT_LINE_SUBTEXT # 15: fourth player; 16: its spinner
+NATIVE_EXTRA_TEXT_DONE:
+
 restore
 b EXIT
 
@@ -417,6 +453,8 @@ blrl
 .set STIDX_ERR_LINE2, 12
 .set STIDX_ERR_LINE3, 13
 .set STIDX_ERR_LINE4, 14
+.set STIDX_LINE4, 15
+.set STIDX_SPINNER4, 16
 .set LINE_IDX_GAP, 2
 .set LINE_COUNT, 3
 
@@ -450,6 +488,16 @@ mflr REG_TEXT_PROPERTIES
 loadwz REG_CSSDT_ADDR, CSSDT_BUF_ADDR
 lwz REG_MSRB_ADDR, CSSDT_MSRB_ADDR(REG_CSSDT_ADDR)
 lwz REG_TEXT_STRUCT, CSSDT_TEXT_STRUCT_ADDR(REG_CSSDT_ADDR)
+
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq NATIVE_COUNT_TEXT_DONE
+li r4, STIDX_LINE4
+addi r5, REG_TEXT_PROPERTIES, TPO_EMPTY_STRING
+bl FN_UPDATE_TEXT
+li r3, 0
+stb r3, CSSDT_SPINNER4(REG_CSSDT_ADDR)
+NATIVE_COUNT_TEXT_DONE:
 
 ################################################################################
 # Overwrite connect code string... will only matter for direct mode
@@ -763,6 +811,83 @@ START_UPDATE_LINES:
 # Init cur line to first line
 li REG_SUBTEXT_IDX, STIDX_LINE1
 
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq STOCK_SELECT_CHARACTER_LINE
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 5(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq NATIVE_PLAYER_LINES
+cmpwi r3, 5
+beq NATIVE_ENTER_CODE_LINES
+# Native VS's "ready to fight" flag rejects two locals on the same team.
+# Slippi readiness is authoritative and independent of that offline flag.
+mr r4, REG_SUBTEXT_IDX
+b UPDATE_CHAR_SELECTED
+
+NATIVE_ENTER_CODE_LINES:
+mr r4, REG_SUBTEXT_IDX
+b UPDATE_CHAR_SELECTED
+
+NATIVE_PLAYER_LINES:
+li r20, 0
+NATIVE_PLAYER_LINE:
+li r21, 1
+slw r21, r21, r20
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 4(REG_CSSDT_ADDR)
+and. r3, r3, r21
+addi r7, REG_TEXT_PROPERTIES, TPO_NATIVE_READY
+li r21, 2 # completed spinner
+bne NATIVE_PLAYER_LINE_DRAW
+addi r7, REG_TEXT_PROPERTIES, TPO_STRING_SELECT_YOUR_CHARACTER
+li r21, 1
+load r3, 0x804A0BD0
+slwi r4, r20, 2
+lwzx r3, r3, r4
+cmpwi r3, 0
+beq NATIVE_PLAYER_LINE_DRAW
+lbz r3, 5(r3)
+cmpwi r3, 0
+bne NATIVE_PLAYER_LINE_DRAW
+lwz r3, -0x49f0(r13)
+mulli r4, r20, 36
+add r3, r3, r4
+lbz r3, 0x70(r3)
+cmplwi r3, 26
+bge NATIVE_PLAYER_LINE_DRAW
+addi r7, REG_TEXT_PROPERTIES, TPO_NATIVE_PRESS_START
+NATIVE_PLAYER_LINE_DRAW:
+cmpwi r20, 3
+bne NATIVE_PLAYER_LINE_INDEX_READY
+li REG_SUBTEXT_IDX, STIDX_LINE4
+NATIVE_PLAYER_LINE_INDEX_READY:
+mr r4, REG_SUBTEXT_IDX
+addi r5, REG_TEXT_PROPERTIES, TPO_NATIVE_PLAYER_LINE
+addi r6, r20, 1
+bl FN_UPDATE_TEXT
+addi r3, r20, CSSDT_SPINNER1
+cmpwi r20, 3
+bne NATIVE_PLAYER_SPINNER_READY
+li r3, CSSDT_SPINNER4
+NATIVE_PLAYER_SPINNER_READY:
+stbx r21, REG_CSSDT_ADDR, r3
+addi REG_SUBTEXT_IDX, REG_SUBTEXT_IDX, LINE_IDX_GAP
+addi r20, r20, 1
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 1(REG_CSSDT_ADDR)
+cmpw r20, r3
+blt NATIVE_PLAYER_LINE
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + 5(REG_CSSDT_ADDR)
+cmpwi r3, 5
+bne UPDATE_LINES_EXIT
+li r4, STIDX_LINE3
+addi r5, REG_TEXT_PROPERTIES, TPO_STRING_PRESS_START_TO
+addi r6, REG_TEXT_PROPERTIES, TPO_STRING_ENTER_CODE
+bl FN_UPDATE_TEXT
+li r3, 1
+stb r3, CSSDT_SPINNER3(REG_CSSDT_ADDR)
+b UPDATE_LINES_EXIT
+
+STOCK_SELECT_CHARACTER_LINE:
+
 ################################################################################
 # Set up select character line
 ################################################################################
@@ -789,6 +914,18 @@ stb r3, CSSDT_SPINNER1(REG_CSSDT_ADDR)
 ################################################################################
 lbz r3, MSRB_IS_LOCAL_PLAYER_READY(REG_MSRB_ADDR)
 mr r4, REG_SUBTEXT_IDX
+# All local picks are saved before opening code entry. Until its callback starts
+# matchmaking, show the native enter-code action rather than a blank search.
+lbz r11, CSSDT_LOCAL_TEAMS_STATUS(REG_CSSDT_ADDR)
+cmpwi r11, 0
+beq LOCAL_TEAMS_LOCK_LINE_STOCK
+lbz r11, CSSDT_LOCAL_TEAMS_STATUS + 5(REG_CSSDT_ADDR)
+cmpwi r11, 5
+beq UPDATE_ENTER_CODE_TEXT
+lbz r11, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r11, 0
+bne UPDATE_LOCKED_IN # native searching/waiting: show the real room status
+LOCAL_TEAMS_LOCK_LINE_STOCK:
 cmpwi r3, 0
 bne UPDATE_LOCKED_IN
 
@@ -830,6 +967,11 @@ cmpwi r3, ONLINE_MODE_DIRECT
 beq UPDATE_ENTER_CODE_TEXT
 cmpwi r3, ONLINE_MODE_TEAMS
 bne UPDATE_PRESS_START_TEXT # If not direct/teams, show search text
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq UPDATE_ENTER_CODE_TEXT
+addi r6, REG_TEXT_PROPERTIES, TPO_STRING_LOCK_IN
+b UPDATE_PRESS_START_TEXT
 
 # Show "enter-code" press start action
 UPDATE_ENTER_CODE_TEXT:
@@ -954,10 +1096,19 @@ addi r5, REG_TEXT_PROPERTIES, TPO_EMPTY_STRING
 bl FN_UPDATE_TEXT
 
 LOOP_SPINNER_CONTINUE:
+cmpwi REG_SUBTEXT_IDX, STIDX_SPINNER4
+beq LOOP_SPINNER_DONE
 addi REG_SUBTEXT_IDX, REG_SUBTEXT_IDX, LINE_IDX_GAP
 addi REG_SPINNER_OFST, REG_SPINNER_OFST, 1
 cmpwi REG_SPINNER_OFST, CSSDT_SPINNER3
 ble LOOP_SPINNER_SETUP_START
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq LOOP_SPINNER_DONE
+li REG_SUBTEXT_IDX, STIDX_SPINNER4
+li REG_SPINNER_OFST, CSSDT_SPINNER4
+b LOOP_SPINNER_SETUP_START
+LOOP_SPINNER_DONE:
 
 ################################################################################
 # Update frame counter
@@ -990,4 +1141,4 @@ blr
 
 
 EXIT:
-lwz	r6, -0x49C8(r13)
+lbz r4, -0x3E57(r13) # original instruction; both menu paths reach this hook

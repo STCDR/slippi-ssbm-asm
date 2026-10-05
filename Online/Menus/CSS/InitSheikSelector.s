@@ -18,6 +18,10 @@
 getMinorMajor r3
 cmpwi r3, SCENE_ONLINE_CSS
 bne EXIT # If not online CSS, continue as normal
+loadwz r3, CSSDT_BUF_ADDR
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r3)
+cmpwi r3, 0
+bne EXIT # the single-picker widget is not attached to multiplayer doors
 b LOAD_START
 
 ################################################################################
