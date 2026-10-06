@@ -189,6 +189,33 @@ lwzx r3, r3, r4
 stfs f30, 0x0c(r3)
 lfs f31, 132(r31)
 stfs f31, 0x10(r3)
+# Force the first visible token to use its assigned adapter-port label.
+load r3, 0x804A0BD0
+slwi r4, r30, 2
+lwzx r3, r3, r4
+li r4, 40
+stb r4, 7(r3)
+li r3, 1
+slw r3, r3, r30
+lbz r4, CSSDT_LOCAL_TEAMS_STATUS + LTS_JOINED(r28)
+and. r3, r3, r4
+bne NATIVE_CACHE_PORT
+# Waiting cards have their native objects ready, but no visible hand/token.
+load r3, 0x804A0BC0
+slwi r4, r30, 2
+lwzx r3, r3, r4
+lwz r3, 0(r3)
+lwz r3, 0x28(r3)
+li r4, 0x10
+branchl r12, JObj_SetFlagsAll
+load r3, 0x804A0BD0
+slwi r4, r30, 2
+lwzx r3, r3, r4
+lwz r3, 0(r3)
+lwz r3, 0x28(r3)
+li r4, 0x10
+branchl r12, JObj_SetFlagsAll
+NATIVE_CACHE_PORT:
 # Cache three native leaf joints and their original X coordinates per port.
 li r27, 0
 NATIVE_CACHE_JOINT:

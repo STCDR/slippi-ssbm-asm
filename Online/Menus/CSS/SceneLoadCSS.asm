@@ -91,7 +91,7 @@ lbz r3, OFST_R13_ONLINE_MODE(r13)
 ori r3, r3, 0x80
 stb r3, 1(r29)
 mr r3, r29
-li r4, 10
+li r4, LOCAL_TEAMS_POLL_SIZE
 li r5, CONST_ExiWrite
 branchl r12, FN_EXITransferBuffer
 mr r3, r29

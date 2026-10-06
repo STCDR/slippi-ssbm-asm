@@ -360,6 +360,10 @@ b FN_OnlineSubmenuThink_TRIGGER_EXI_MSG
 FN_OnlineSubmenuThink_GO_TO_CSS:
 # Set the selected mode
 stb r3, OFST_R13_ONLINE_MODE(r13)
+cmpwi r3, ONLINE_MODE_TEAMS
+bne FN_OnlineSubmenuThink_MODE_BOUND
+bl FN_LOCAL_TEAMS_ENTER
+FN_OnlineSubmenuThink_MODE_BOUND:
 
 # Play success sound
 li	r3, 1
@@ -850,6 +854,33 @@ restore BKP_DEFAULT_FREE_SPACE_SIZE, 2
 blr
 
 ################################################################################
+# Bind the controller that selected Teams before CSS remaps its input reports.
+FN_LOCAL_TEAMS_ENTER:
+backup
+li r3, 64
+branchl r12, HSD_MemAlloc
+mr r31, r3
+li r4, 64
+branchl r12, Zero_AreaLength
+li r3, CONST_LocalTeamsPoll
+stb r3, 0(r31)
+li r3, ONLINE_MODE_TEAMS + 0x20 # explicit new Teams entry, not a CSS reload
+stb r3, 1(r31)
+lbz r3, -0x5108(r13)
+stb r3, 10(r31)
+mr r3, r31
+li r4, LOCAL_TEAMS_POLL_SIZE
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+mr r3, r31
+li r4, LOCAL_TEAMS_STATUS_SIZE
+li r5, CONST_ExiRead
+branchl r12, FN_EXITransferBuffer
+mr r3, r31
+branchl r12, HSD_Free
+restore
+blr
+
 # Properties
 ################################################################################
 TEXT_PROPERTIES:

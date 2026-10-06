@@ -118,8 +118,18 @@ mr REG_MSRB_ADDR, r3
 fetchOnlineStaticDataPtr r12
 
 # Prepare player indices
-lbz r3, -0x5108(r13) # Grab the 1p port in use (local mode fixes this to P1)
+LOCAL_TEAMS_SELECT_SOURCE:
+lbz r3, -0x5108(r13) # stock single-player source
+loadwz r4, CSSDT_BUF_ADDR
+cmpwi r4, 0
+beq LOCAL_TEAMS_SOURCE_READY
+lbz r5, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(r4)
+cmpwi r5, 0
+beq LOCAL_TEAMS_SOURCE_READY
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_PORTS(r4)
+LOCAL_TEAMS_SOURCE_READY:
 stb r3, ODB_INPUT_SOURCE_INDEX(REG_ODB_ADDRESS)
+LOCAL_TEAMS_SOURCE_SET:
 lbz r3, MSRB_LOCAL_PLAYER_INDEX(REG_MSRB_ADDR)
 stb r3, ODB_LOCAL_PLAYER_INDEX(REG_ODB_ADDRESS)
 stb r3, OSD_LOCAL_PLAYER_INDEX(r12)

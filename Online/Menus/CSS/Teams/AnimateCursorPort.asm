@@ -24,7 +24,7 @@ bne EXIT # exit if not on TEAMS mode
 # Native local CSS uses Melee's per-door teams and portraits.
 lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_NATIVE(REG_CSSDT_ADDR)
 cmpwi r3, 0
-bne EXIT
+bne NATIVE_PORT_LABEL
 lbz REG_TEAM_IDX, CSSDT_TEAM_IDX(REG_CSSDT_ADDR)
 
 SKIP_PORT_CALC:
@@ -43,6 +43,22 @@ add REG_TEAM_IDX, REG_TEAM_IDX, r6
 
 mr r3, REG_TEAM_IDX
 #logf LOG_LEVEL_NOTICE, "CURSOR COLOR r3: %d", "mr r5, 3", "mr r6, 6"
+branchl r12, FN_IntToFloat
+b EXIT
+
+NATIVE_PORT_LABEL:
+# Retain the native cursor's team frame, replace only its displayed port.
+lbz r6, 4(r31) # cursor's card index; selection ownership remains unchanged
+addi r5, REG_CSSDT_ADDR, CSSDT_LOCAL_TEAMS_STATUS + LTS_PORTS
+lbzx r5, r5, r6
+cmpwi r5, 4
+bge EXIT
+fctiwz f0, f1
+stfd f0, 0x30(sp)
+lwz r3, 0x34(sp)
+andi. r3, r3, 3
+slwi r5, r5, 2
+add r3, r3, r5
 branchl r12, FN_IntToFloat
 
 b EXIT

@@ -11,6 +11,9 @@ beq EXIT
 backup BKP_DEFAULT_FREE_SPACE_SIZE, 2
 mr r30, r31 # stock cursor data
 loadwz r31, CSSDT_BUF_ADDR
+# Local Teams routes the native 31-frame B hold: main exits, teammates leave.
+li r3, 0
+sth r3, 0x0a(r30)
 # P1 owns the count selector; r28 contains retail pressed-button edges.
 lbz r3, 4(r30)
 cmpwi r3, 0

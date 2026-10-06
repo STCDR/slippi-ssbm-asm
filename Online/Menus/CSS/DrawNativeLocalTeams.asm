@@ -25,6 +25,46 @@ cmpwi r3, 0
 beq DRAW_DONE
 bl DATA
 mflr r28
+# Keep unclaimed hands/tokens hidden even if retail Think refreshed their flags.
+li r27, 0
+NATIVE_CURSOR_VISIBILITY:
+li r24, 1
+slw r24, r24, r27
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_JOINED(r29)
+and r24, r24, r3
+lbz r3, CSSDT_NATIVE_VISIBLE_COUNT(r29)
+cmpw r27, r3
+blt NATIVE_CURSOR_WITHIN_COUNT
+li r24, 0
+NATIVE_CURSOR_WITHIN_COUNT:
+load r3, 0x804A0BC0
+slwi r4, r27, 2
+lwzx r3, r3, r4
+cmpwi r3, 0
+beq NATIVE_CURSOR_VISIBILITY_NEXT
+lwz r3, 0(r3)
+lwz r3, 0x28(r3)
+li r4, 0x10
+cmpwi r24, 0
+beq NATIVE_CURSOR_HIDE
+branchl r12, JObj_ClearFlagsAll
+b NATIVE_CURSOR_VISIBILITY_NEXT
+NATIVE_CURSOR_HIDE:
+branchl r12, JObj_SetFlagsAll
+load r3, 0x804A0BD0
+slwi r4, r27, 2
+lwzx r3, r3, r4
+cmpwi r3, 0
+beq NATIVE_CURSOR_VISIBILITY_NEXT
+lwz r3, 0(r3)
+lwz r3, 0x28(r3)
+li r4, 0x10
+branchl r12, JObj_SetFlagsAll
+NATIVE_CURSOR_VISIBILITY_NEXT:
+addi r27, r27, 1
+cmpwi r27, 4
+blt NATIVE_CURSOR_VISIBILITY
+NATIVE_CURSOR_VISIBILITY_DONE:
 # Character-name SIS objects are separate from the panel joints. Hide only them.
 li r27, 0
 HIDE_CHARACTER_NAME:

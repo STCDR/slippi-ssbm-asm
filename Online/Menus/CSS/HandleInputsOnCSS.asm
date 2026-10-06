@@ -175,6 +175,12 @@ NATIVE_TEAMS_HANDLE:
 lbz r3, -0x49aa(r13)
 cmpwi r3, 0
 bne SKIP_START_MATCH # native keyboard is operating
+lbz r3, CSSDT_LOCAL_TEAMS_STATUS + LTS_ROSTER_ACTION(REG_CSSDT_ADDR)
+cmpwi r3, 0
+beq NATIVE_TEAMS_NO_ROSTER_REQUEST
+bl FN_NATIVE_ROSTER_REQUEST
+b SKIP_START_MATCH
+NATIVE_TEAMS_NO_ROSTER_REQUEST:
 # Stock: Z press cancels a search/error; connected lobbies require >48 held
 # frames. Separate timers prevent one local inheriting another's partial hold.
 lbz r3, MSRB_CONNECTION_STATE(REG_MSRB_ADDR)
@@ -602,6 +608,87 @@ blr
 #     -1 = unselected (use opponents stage)
 #      0+ = specify stage ID.
 ################################################################################
+FN_NATIVE_ROSTER_REQUEST:
+backup
+loadwz r31, CSSDT_BUF_ADDR
+lbz r26, CSSDT_LOCAL_TEAMS_STATUS + LTS_ROSTER_COUNT(r31)
+lbz r25, CSSDT_LOCAL_TEAMS_STATUS + 1(r31)
+li r3, 64
+  branchl r12, HSD_MemAlloc
+  mr r24, r3
+  cmpwi r24, 0
+  beq FN_NATIVE_ROSTER_DONE
+li r3, CONST_LocalTeamsCount
+stb r3, 0(r24)
+stb r26, 1(r24)
+li r27, 0
+FN_NATIVE_ROSTER_PICK:
+mulli r3, r27, 0x24
+lwz r29, -0x49f0(r13)
+add r29, r29, r3
+slwi r3, r27, 2
+addi r28, r24, 2
+add r28, r28, r3
+lbz r3, 0x70(r29)
+stb r3, 0(r28)
+lbz r3, 0x73(r29)
+stb r3, 1(r28)
+lbz r3, 0x79(r29)
+stb r3, 2(r28)
+li r3, 0
+cmpw r27, r25
+bge FN_NATIVE_ROSTER_PICK_READY
+load r4, 0x804A0BD0
+slwi r5, r27, 2
+lwzx r4, r4, r5
+cmpwi r4, 0
+beq FN_NATIVE_ROSTER_PICK_READY
+lbz r4, 5(r4)
+cmpwi r4, 0
+bne FN_NATIVE_ROSTER_PICK_READY
+li r3, 1
+FN_NATIVE_ROSTER_PICK_READY:
+stb r3, 3(r28)
+addi r27, r27, 1
+cmpwi r27, 4
+blt FN_NATIVE_ROSTER_PICK
+mr r3, r24
+li r4, 18
+li r5, CONST_ExiWrite
+branchl r12, FN_EXITransferBuffer
+mr r3, r24
+li r4, LOCAL_TEAMS_STATUS_SIZE
+  li r5, CONST_ExiRead
+  branchl r12, FN_EXITransferBuffer
+  lbz r3, 0(r24)
+  cmpwi r3, 1
+  bne FN_NATIVE_ROSTER_FREE
+  lbz r3, LTS_NATIVE(r24)
+  cmpwi r3, 1
+  bne FN_NATIVE_ROSTER_FREE
+cmpwi r26, 0
+beq FN_NATIVE_ROSTER_RELOAD
+lbz r3, 1(r24)
+cmpw r3, r26
+bne FN_NATIVE_ROSTER_FREE
+FN_NATIVE_ROSTER_RELOAD:
+li r3, 1
+cmpwi r26, 0
+bne FN_NATIVE_ROSTER_SET_RELOAD
+  li r3, 0 # entering controller leaves to the Online menu
+FN_NATIVE_ROSTER_SET_RELOAD:
+stb r3, CSSDT_NATIVE_RELOAD(r31)
+li r3, 2
+stb r3, -0x49aa(r13)
+li r3, 2
+branchl r12, SFX_Menu_CommonSound
+FN_NATIVE_ROSTER_FREE:
+  mr r3, r24
+  branchl r12, HSD_Free
+FN_NATIVE_ROSTER_DONE:
+  restore
+blr
+
 FN_TX_NATIVE_PICK:
 backup
 mr r31, r3 # logical local player, independent of the menu-entering controller

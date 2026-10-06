@@ -1017,8 +1017,16 @@ sthx r3, REG_VARIOUS_1, r4
 addi REG_COUNT, REG_COUNT, 1
 cmpwi REG_COUNT, 4
 blt LOCAL_TEAMS_COPY_BUTTONS
+loadGlobalFrame r3
+stw r3, 59(REG_VARIOUS_1)
+lbz r3, -0x5108(r13)
+stb r3, 10(REG_VARIOUS_1)
+addi r3, REG_VARIOUS_1, 11
+addi r4, REG_VARIOUS_1, 64
+li r5, 4 * PAD_REPORT_SIZE
+branchl r12, memcpy
 mr r3, REG_VARIOUS_1
-li r4, 10
+li r4, LOCAL_TEAMS_POLL_SIZE
 li r5, CONST_ExiWrite
 branchl r12, FN_EXITransferBuffer
 mr r3, REG_VARIOUS_1
@@ -1081,7 +1089,7 @@ b LOCAL_TEAMS_CSS_FREE
 NATIVE_TEAMS_MAP_PADS:
 li r3, 0
 stb r3, -0x49b0(r13)
-stb r3, -0x5108(r13) # gameplay primary always uses physical P1
+stb r3, -0x5108(r13) # CSS/keyboard use card 1; gameplay reads its physical mapping
 li REG_COUNT, 0
 NATIVE_TEAMS_MAP_PAD:
 mulli r3, REG_COUNT, PAD_REPORT_SIZE
@@ -1090,6 +1098,11 @@ add REG_VARIOUS_2, REG_PARENT_STACK_FRAME, r3
 lbz r3, 1(REG_VARIOUS_1)
 cmpw REG_COUNT, r3
 bge NATIVE_TEAMS_UNUSED_PAD
+li r3, 1
+slw r3, r3, REG_COUNT
+  lbz r4, LTS_JOINED(REG_VARIOUS_1)
+  and. r4, r4, r3
+  beq NATIVE_TEAMS_BLOCKED_PAD
 addi r3, REG_COUNT, LTS_PORTS
 lbzx r3, REG_VARIOUS_1, r3
 mulli r3, r3, PAD_REPORT_SIZE
@@ -1098,6 +1111,17 @@ add r4, r4, r3
 mr r3, REG_VARIOUS_2
 li r5, PAD_REPORT_SIZE
 branchl r12, memcpy
+# Claimed cursors can move immediately. Only the joining buttons wait for release.
+li r3, 1
+slw r3, r3, REG_COUNT
+lbz r4, LTS_SUPPRESSED(REG_VARIOUS_1)
+and. r3, r3, r4
+beq NATIVE_TEAMS_BUTTONS_ENABLED
+li r3, 0
+sth r3, 0(REG_VARIOUS_2)
+sth r3, 6(REG_VARIOUS_2) # analog shoulders cannot become held CSS buttons
+b NATIVE_TEAMS_NEXT_PAD
+NATIVE_TEAMS_BUTTONS_ENABLED:
 # Allow P1 to operate the keyboard; other players keep movement only.
 lbz r3, -0x49aa(r13)
 cmpwi r3, 0
@@ -1125,12 +1149,19 @@ andi. r3, r3, 0x10 # Z remains available; keep stick movement like stock Slippi
 sth r3, 0(REG_VARIOUS_2)
 b NATIVE_TEAMS_NEXT_PAD
 NATIVE_TEAMS_UNUSED_PAD:
-mr r3, REG_VARIOUS_2
-li r4, PAD_REPORT_SIZE
-branchl r12, Zero_AreaLength
-li r3, -1
-stb r3, 10(REG_VARIOUS_2)
-NATIVE_TEAMS_NEXT_PAD:
+  mr r3, REG_VARIOUS_2
+  li r4, PAD_REPORT_SIZE
+  branchl r12, Zero_AreaLength
+  li r3, -1
+  stb r3, 10(REG_VARIOUS_2)
+  b NATIVE_TEAMS_NEXT_PAD
+NATIVE_TEAMS_BLOCKED_PAD:
+  # A neutral connected report keeps native CSS from turning a waiting card
+  # into a CPU or moving its hand to the disconnected-controller position.
+  mr r3, REG_VARIOUS_2
+  li r4, PAD_REPORT_SIZE
+  branchl r12, Zero_AreaLength
+  NATIVE_TEAMS_NEXT_PAD:
 addi REG_COUNT, REG_COUNT, 1
 cmpwi REG_COUNT, 4
 blt NATIVE_TEAMS_MAP_PAD

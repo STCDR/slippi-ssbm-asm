@@ -296,12 +296,17 @@
 .set CONST_LocalTeamsConfirm, 0xC6
 .set CONST_LocalTeamsInputs, 0xC7
 .set CONST_LocalTeamsCount, 0xC8
-.set LOCAL_TEAMS_STATUS_SIZE, 32 # native CSS flag/masks, mappings and saved character/costume/team
+.set LOCAL_TEAMS_POLL_SIZE, 63 # command/mode/buttons/entering port/PAD reports/CSS frame
+.set LOCAL_TEAMS_STATUS_SIZE, 36 # mappings/picks plus joined and suppressed masks
 .set LTS_NATIVE, 9
 .set LTS_ARMED, 10
 .set LTS_START_HELD, 11
 .set LTS_PORTS, 12
 .set LTS_PICKS, 16
+.set LTS_JOINED, 32
+.set LTS_SUPPRESSED, 33
+.set LTS_ROSTER_COUNT, 34
+.set LTS_ROSTER_ACTION, 35
 
 .set RXB_RESULT, 0 # u8
 .set RXB_OPNT_COUNT, RXB_RESULT + 1 # u8
