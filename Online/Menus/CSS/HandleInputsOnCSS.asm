@@ -144,7 +144,7 @@ beq SKIP_START_MATCH
 li r3, ISWINNER_NULL
 stb r3, OFST_R13_ISWINNER(r13)
 stb REG_ZERO, OFST_R13_CHOSESTAGE(r13)
-li r3, 0x1F # fixed Battlefield proposal
+li r3, SB_RAND # draw from Slippi's allowed-stage pool
 bl FN_TX_LOCK_IN
 # Only the last local confirmation opens normal Slippi code entry. Rematches
 # keep the existing room. The explicit localhost fixture starts without a code.
@@ -710,8 +710,9 @@ lbz r3, 0x79(r29)
 stb r3, PSTB_TEAM_ID(r30)
 li r3, 1
 stb r3, PSTB_CHAR_OPT(r30)
+li r3, 3 # random stage; Dolphin shares one proposal across the local group
 stb r3, PSTB_STAGE_OPT(r30)
-li r3, 0x1f
+li r3, 0
 sth r3, PSTB_STAGE_ID(r30)
 ori r3, r31, 0x80 # private C6 discriminant, stock Slippi wire format unchanged
 stb r3, PSTB_ONLINE_MODE(r30)
